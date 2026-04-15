@@ -117,8 +117,8 @@ contract Staking {
 
     // deposit = "stake" in one function
     function deposit(uint256 _amount) external {
-        _updatePool();               
-        _harvest(msg.sender);         
+        _updatePool();                 // 1) update global math
+        _harvest(msg.sender);          // 2) pay old rewards
         if (_amount > 0) {
             _safeTransferFrom(STAKING_TOKEN, msg.sender, address(this), _amount);
             userInfo[msg.sender].amount += _amount;
