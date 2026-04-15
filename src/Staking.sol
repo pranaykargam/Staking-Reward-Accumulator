@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+// That interface is just the minimal ERC‑20 API your staking contract needs so it can move tokens in and out
+// this interface is the small “bridge” that lets your staking contract talk to any ERC‑20 token for staking and rewards.
+
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
+
+
+
+
 
 contract Staking {
     uint256 private constant PRECISION = 1e12;
@@ -110,8 +117,8 @@ contract Staking {
 
     // deposit = "stake" in one function
     function deposit(uint256 _amount) external {
-        _updatePool();                 // 1) update global math
-        _harvest(msg.sender);          // 2) pay old rewards
+        _updatePool();               
+        _harvest(msg.sender);         
         if (_amount > 0) {
             _safeTransferFrom(STAKING_TOKEN, msg.sender, address(this), _amount);
             userInfo[msg.sender].amount += _amount;
