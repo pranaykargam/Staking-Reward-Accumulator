@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// That interface is just the minimal ERC‑20 API your staking contract needs so it can move tokens in and out
-// this interface is the small “bridge” that lets your staking contract talk to any ERC‑20 token for staking and rewards.
+
 
 interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
@@ -118,7 +117,7 @@ contract Staking {
         return a < b ? a : b;
     }
 
-    // update global accumulator based on how many blocks passed
+  
     function _updatePool() internal {
         uint256 toBlock = _min(block.number, END_BLOCK);
         if (toBlock <= lastRewardBlock) return;
@@ -131,12 +130,12 @@ contract Staking {
         uint256 blocks = toBlock - lastRewardBlock;
         uint256 reward = blocks * REWARD_PER_BLOCK;
 
-        // assume rewardToken is pre-funded to this contract
+    
         accRewardPerToken += reward * PRECISION / totalStaked;
         lastRewardBlock = toBlock;
     }
 
-    // settle user's pending reward and send it
+
     function _harvest(address _user) internal {
         UserInfo storage user = userInfo[_user];
         uint256 pending = user.amount * accRewardPerToken / PRECISION - user.rewardDebt;
@@ -148,7 +147,7 @@ contract Staking {
         }
     }
 
-    // update user's rewardDebt snapshot
+
     function _updateUser(address _user) internal {
         UserInfo storage user = userInfo[_user];
         user.rewardDebt = user.amount * accRewardPerToken / PRECISION;
@@ -168,7 +167,6 @@ contract Staking {
         uint256 fundedMinusPaid = totalRewardsFunded - totalRewardsPaid;
         uint256 contractRewardBalance = REWARD_TOKEN.balanceOf(address(this));
 
-        // If staking token and reward token are the same asset, staked principal must remain untouchable.
         if (address(REWARD_TOKEN) == address(STAKING_TOKEN)) {
             if (contractRewardBalance <= totalStaked) return 0;
             contractRewardBalance -= totalStaked;
@@ -247,14 +245,11 @@ contract Staking {
         _updateUser(msg.sender);
     }
 
-    //  claim rewards without changing stake
     function claim() external whenNotPaused nonReentrant {
         _updatePool();
         _harvest(msg.sender);
         _updateUser(msg.sender);
     }
-
-    // emergency path: skip rewards, only unstake principal
     function emergencyWithdraw() external nonReentrant {
         UserInfo storage user = userInfo[msg.sender];
         uint256 amount = user.amount;
