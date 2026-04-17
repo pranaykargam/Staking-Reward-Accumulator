@@ -267,5 +267,25 @@ contract Staking {
         _safeTransfer(STAKING_TOKEN, msg.sender, amount);
         emit EmergencyWithdrawn(msg.sender, amount);
     }
+
+    function getUserPosition(address _user)
+        external
+        view
+        returns (uint256 stakedAmount, uint256 pending, uint256 rewardDebt)
+    {
+        UserInfo memory user = userInfo[_user];
+        stakedAmount = user.amount;
+        rewardDebt = user.rewardDebt;
+
+        uint256 _accRewardPerToken = accRewardPerToken;
+        uint256 toBlock = _min(block.number, END_BLOCK);
+        if (toBlock > lastRewardBlock && totalStaked != 0) {
+            uint256 blocks = toBlock - lastRewardBlock;
+            uint256 reward = blocks * REWARD_PER_BLOCK;
+            _accRewardPerToken += reward * PRECISION / totalStaked;
+        }
+
+        pending = user.amount * _accRewardPerToken / PRECISION - user.rewardDebt;
+    }
 }
 
