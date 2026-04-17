@@ -207,7 +207,7 @@ contract StakingTest is Test {
     function testFundAndWithdrawUnusedRewards() public {
         uint256 initialFunded = staking.totalRewardsFunded();
 
-     
+        // withdraw part of unused rewards
         uint256 withdrawAmount = 10_000 ether;
         uint256 before = rewardToken.balanceOf(owner);
 
