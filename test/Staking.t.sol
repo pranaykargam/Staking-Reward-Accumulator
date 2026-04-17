@@ -181,7 +181,7 @@ contract StakingTest is Test {
         vm.stopPrank();
     }
 
-
+    // --- owner functions ---
 
     function testOnlyOwnerCanSetOwner() public {
         vm.prank(alice);
@@ -245,6 +245,18 @@ contract StakingTest is Test {
         (uint256 amount, uint256 rewardDebt) = staking.userInfo(alice);
         assertEq(amount, 0);
         assertEq(rewardDebt, 0);
+    }
+
+      function testGetUserPositionReturnsExpectedValues() public {
+        vm.startPrank(alice);
+        stakingToken.approve(address(staking), STAKE_AMOUNT);
+        staking.deposit(STAKE_AMOUNT);
+        vm.stopPrank();
+        vm.roll(block.number + 12);
+        (uint256 stakedAmount, uint256 pending, uint256 rewardDebt) = staking.getUserPosition(alice);
+        assertEq(stakedAmount, STAKE_AMOUNT, "staked amount");
+        assertEq(pending, 12 * REWARD_PER_BLOCK, "pending reward");
+        assertEq(rewardDebt, 0, "reward debt");
     }
 
 
