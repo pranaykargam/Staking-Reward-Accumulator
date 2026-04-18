@@ -2,7 +2,7 @@
 
 This project implements a **block-emission staking pool**: users lock a **staking token**, and the contract distributes a **reward token** over time according to a fixed schedule.
 
-<img src = "./images/img-01.png>
+<img src="./images/img-01.png">
 
 ## What problem the math solves
 
