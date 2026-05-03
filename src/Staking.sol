@@ -7,25 +7,26 @@ pragma solidity ^0.8.20;
 interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
     function transfer(address to, uint256 amount) external returns (bool);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool);
 }
-
-
-
-
-
 contract Staking {
-    uint256 private constant PRECISION = 1e12; // 12 decimals matches most stablecoin oracles and prediction market needs 
+    uint256 private constant PRECISION = 1e12; // 12 decimals matches most stablecoin oracles and prediction market needs
 
-    IERC20 public immutable STAKING_TOKEN;   
-    IERC20 public immutable REWARD_TOKEN;    
+  
 
-    uint256 public immutable REWARD_PER_BLOCK;    // e.g. 1000 REWARD per block
+    IERC20 public immutable STAKING_TOKEN;
+    IERC20 public immutable REWARD_TOKEN;
+
+    uint256 public immutable REWARD_PER_BLOCK; // e.g. 1000 REWARD per block
     uint256 public immutable START_BLOCK;
     uint256 public immutable END_BLOCK;
-    uint256 public lastRewardBlock;            // like lastUpdateBlockNumber
-    uint256 public accRewardPerToken;          // accumulated reward per 1 TOKEN, scaled by 1e12
-    uint256 public totalStaked;                // total TOKEN in the pool
+    uint256 public lastRewardBlock; // like lastUpdateBlockNumber
+    uint256 public accRewardPerToken; // accumulated reward per 1 TOKEN, scaled by 1e12
+    uint256 public totalStaked; // total TOKEN in the pool
     uint256 public totalRewardsFunded;
     uint256 public totalRewardsPaid;
     address public owner;
@@ -33,8 +34,8 @@ contract Staking {
     uint256 private _locked = 1;
 
     struct UserInfo {
-        uint256 amount;        // how many TOKEN the user has staked
-        uint256 rewardDebt;    // amount * accRewardPerToken / 1e12 at last action
+        uint256 amount; // how many TOKEN the user has staked
+        uint256 rewardDebt; // amount * accRewardPerToken / 1e12 at last action
     }
 
     mapping(address => UserInfo) public userInfo;
@@ -66,7 +67,8 @@ contract Staking {
         uint256 _startBlock,
         uint256 _endBlock
     ) {
-        if (_stakingToken == address(0) || _rewardToken == address(0)) revert ZeroAddress();
+        if (_stakingToken == address(0) || _rewardToken == address(0))
+            revert ZeroAddress();
         if (_rewardPerBlock == 0) revert ZeroAmount();
         if (_endBlock <= _startBlock) revert InvalidRewardRange();
         STAKING_TOKEN = IERC20(_stakingToken);
@@ -89,10 +91,10 @@ contract Staking {
         if (toBlock > fromBlock && totalStaked != 0) {
             uint256 blocks = toBlock - fromBlock;
             uint256 reward = blocks * REWARD_PER_BLOCK;
-            _accRewardPerToken += reward * PRECISION / totalStaked;
+            _accRewardPerToken += (reward * PRECISION) / totalStaked;
         }
 
-        return user.amount * _accRewardPerToken / PRECISION - user.rewardDebt;
+        return (user.amount * _accRewardPerToken) / PRECISION - user.rewardDebt;
     }
 
     // ========== core math logic ==========
@@ -132,16 +134,19 @@ contract Staking {
         uint256 reward = blocks * REWARD_PER_BLOCK;
 
         // assume rewardToken is pre-funded to this contract
-        accRewardPerToken += reward * PRECISION / totalStaked;
+        accRewardPerToken += (reward * PRECISION) / totalStaked;
         lastRewardBlock = toBlock;
     }
 
     // settle user's pending reward and send it
     function _harvest(address _user) internal {
         UserInfo storage user = userInfo[_user];
-        uint256 pending = user.amount * accRewardPerToken / PRECISION - user.rewardDebt;
+        uint256 pending = (user.amount * accRewardPerToken) /
+            PRECISION -
+            user.rewardDebt;
         if (pending > 0) {
-            if (pending > _availableRewardBalance()) revert InsufficientRewardFunding();
+            if (pending > _availableRewardBalance())
+                revert InsufficientRewardFunding();
             totalRewardsPaid += pending;
             _safeTransfer(REWARD_TOKEN, _user, pending);
             emit Claimed(_user, pending);
@@ -151,7 +156,7 @@ contract Staking {
     // update user's rewardDebt snapshot
     function _updateUser(address _user) internal {
         UserInfo storage user = userInfo[_user];
-        user.rewardDebt = user.amount * accRewardPerToken / PRECISION;
+        user.rewardDebt = (user.amount * accRewardPerToken) / PRECISION;
     }
 
     function _safeTransfer(IERC20 token, address to, uint256 amount) internal {
@@ -159,7 +164,12 @@ contract Staking {
         if (!success) revert TokenTransferFailed();
     }
 
-    function _safeTransferFrom(IERC20 token, address from, address to, uint256 amount) internal {
+    function _safeTransferFrom(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 amount
+    ) internal {
         bool success = token.transferFrom(from, to, amount);
         if (!success) revert TokenTransferFailed();
     }
@@ -174,7 +184,10 @@ contract Staking {
             contractRewardBalance -= totalStaked;
         }
 
-        return contractRewardBalance < fundedMinusPaid ? contractRewardBalance : fundedMinusPaid;
+        return
+            contractRewardBalance < fundedMinusPaid
+                ? contractRewardBalance
+                : fundedMinusPaid;
     }
 
     // ========== owner functions ==========
@@ -197,11 +210,15 @@ contract Staking {
         emit RewardFunded(msg.sender, _amount);
     }
 
-    function withdrawUnusedRewards(address _to, uint256 _amount) external onlyOwner {
+    function withdrawUnusedRewards(
+        address _to,
+        uint256 _amount
+    ) external onlyOwner {
         if (_to == address(0)) revert ZeroAddress();
         if (_amount == 0) revert ZeroAmount();
         _updatePool();
-        if (_amount > _availableRewardBalance()) revert InsufficientRewardFunding();
+        if (_amount > _availableRewardBalance())
+            revert InsufficientRewardFunding();
 
         totalRewardsFunded -= _amount;
         _safeTransfer(REWARD_TOKEN, _to, _amount);
@@ -215,19 +232,27 @@ contract Staking {
         depositFor(msg.sender, _amount);
     }
 
-    function depositFor(address _beneficiary, uint256 _amount) public whenNotPaused nonReentrant {
+    function depositFor(
+        address _beneficiary,
+        uint256 _amount
+    ) public whenNotPaused nonReentrant {
         if (_beneficiary == address(0)) revert ZeroAddress();
         if (block.number < START_BLOCK) revert RewardsNotStarted();
 
-        _updatePool();                 // 1) update global math
-        _harvest(_beneficiary);        // 2) pay old rewards
+        _updatePool(); // 1) update global math
+        _harvest(_beneficiary); // 2) pay old rewards
         if (_amount > 0) {
-            _safeTransferFrom(STAKING_TOKEN, msg.sender, address(this), _amount);
+            _safeTransferFrom(
+                STAKING_TOKEN,
+                msg.sender,
+                address(this),
+                _amount
+            );
             userInfo[_beneficiary].amount += _amount;
             totalStaked += _amount;
             emit Deposited(_beneficiary, _amount);
         }
-        _updateUser(_beneficiary);     // 3) refresh rewardDebt
+        _updateUser(_beneficiary); // 3) refresh rewardDebt
     }
 
     function withdraw(uint256 _amount) external whenNotPaused nonReentrant {
@@ -247,13 +272,11 @@ contract Staking {
         _updateUser(msg.sender);
     }
 
-
     function claim() external whenNotPaused nonReentrant {
         _updatePool();
         _harvest(msg.sender);
         _updateUser(msg.sender);
     }
-
 
     function emergencyWithdraw() external nonReentrant {
         UserInfo storage user = userInfo[msg.sender];
@@ -268,7 +291,9 @@ contract Staking {
         emit EmergencyWithdrawn(msg.sender, amount);
     }
 
-    function getUserPosition(address _user)
+    function getUserPosition(
+        address _user
+    )
         external
         view
         returns (uint256 stakedAmount, uint256 pending, uint256 rewardDebt)
@@ -282,10 +307,12 @@ contract Staking {
         if (toBlock > lastRewardBlock && totalStaked != 0) {
             uint256 blocks = toBlock - lastRewardBlock;
             uint256 reward = blocks * REWARD_PER_BLOCK;
-            _accRewardPerToken += reward * PRECISION / totalStaked;
+            _accRewardPerToken += (reward * PRECISION) / totalStaked;
         }
 
-        pending = user.amount * _accRewardPerToken / PRECISION - user.rewardDebt;
+        pending =
+            (user.amount * _accRewardPerToken) /
+            PRECISION -
+            user.rewardDebt;
     }
 }
-
