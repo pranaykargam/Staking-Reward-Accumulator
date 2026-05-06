@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// That interface is just the minimal ERC‑20 API your staking contract needs so it can move tokens in and out
-// this interface is the small “bridge” that lets your staking contract talk to any ERC‑20 token for staking and rewards.
 
 interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
@@ -16,15 +14,7 @@ interface IERC20 {
 
 contract Staking {
 
-    // Quick confirmation of what counts as state variables:
 
-   // ✅ Declared at contract level (not inside functions)
-   // ✅ Stored on-chain (persist across transactions)
-  // ✅ Include: constants, immutables, public/private vars
-
-  // Immutables (set once in constructor, read from bytecode):
-
-  // Mutable public state variables (readable via getters, updatable):
 
 
     uint256 private constant PRECISION = 1e12; // 12 decimals matches most stablecoin oracles and prediction market needs
@@ -66,7 +56,6 @@ contract Staking {
     error TokenTransferFailed();
 
 
-// display only this user’s deposit history, instead of scanning every deposit made by everyone.
     event OwnerUpdated(address indexed oldOwner, address indexed newOwner);
     event PauseUpdated(bool isPaused);
     event RewardFunded(address indexed by, uint256 amount);
@@ -77,7 +66,7 @@ contract Staking {
     event EmergencyWithdrawn(address indexed user, uint256 amount);
 
     // ========== constructor ==========
-  // We use the constructor to initialize the contract with correct values before anyone starts using it.
+
       constructor(
         address _stakingToken,
         address _rewardToken,
@@ -158,10 +147,7 @@ contract Staking {
         lastRewardBlock = toBlock;
     }
 
-    // settle user's pending reward and send it
-    // Harvest function means collect your earned rewards.
 
-    // harvest is the moment when we are calculating and paying the user’s current pending reward.
     function _harvest(address _user) internal {
         UserInfo storage user = userInfo[_user];
         uint256 pending = (user.amount * accRewardPerToken) /
@@ -176,10 +162,7 @@ contract Staking {
         }
     }
 
-    // update user's rewardDebt snapshot
-    // “save the user’s reward checkpoint so future claims are calculated correctly.”
 
-    // _updateUser() is not the place where we calculate what the user should receive, so we do not subtract rewardDebt there.
     function _updateUser(address _user) internal {
         UserInfo storage user = userInfo[_user];
         user.rewardDebt = (user.amount * accRewardPerToken) / PRECISION;
