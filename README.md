@@ -107,3 +107,5 @@ Returns staked principal **without** going through the reward settlement path: a
 4. **Funding → solvent payouts** in real ERC-20 balances.
 
 That separation—**schedule + index + checkpoint + funding**—is the core theory of this project.
+
+https://deepwiki.com/pranaykargam/Staking-Reward-Accumulator/2.1-reward-math-and-the-global-accumulator

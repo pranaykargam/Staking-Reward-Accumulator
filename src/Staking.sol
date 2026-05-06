@@ -13,10 +13,21 @@ interface IERC20 {
         uint256 amount
     ) external returns (bool);
 }
-contract Staking {
-    uint256 private constant PRECISION = 1e12; // 12 decimals matches most stablecoin oracles and prediction market needs
 
-  
+contract Staking {
+
+    // Quick confirmation of what counts as state variables:
+
+   // ✅ Declared at contract level (not inside functions)
+   // ✅ Stored on-chain (persist across transactions)
+  // ✅ Include: constants, immutables, public/private vars
+
+  // Immutables (set once in constructor, read from bytecode):
+
+  // Mutable public state variables (readable via getters, updatable):
+
+
+    uint256 private constant PRECISION = 1e12; // 12 decimals matches most stablecoin oracles and prediction market needs
 
     IERC20 public immutable STAKING_TOKEN;
     IERC20 public immutable REWARD_TOKEN;
@@ -33,10 +44,13 @@ contract Staking {
     bool public isPaused;
     uint256 private _locked = 1;
 
+// blue print for the UserInfo
     struct UserInfo {
         uint256 amount; // how many TOKEN the user has staked
         uint256 rewardDebt; // amount * accRewardPerToken / 1e12 at last action
     }
+
+    // it stores the data of UserInfo
 
     mapping(address => UserInfo) public userInfo;
 
@@ -51,6 +65,8 @@ contract Staking {
     error InsufficientRewardFunding();
     error TokenTransferFailed();
 
+
+// display only this user’s deposit history, instead of scanning every deposit made by everyone.
     event OwnerUpdated(address indexed oldOwner, address indexed newOwner);
     event PauseUpdated(bool isPaused);
     event RewardFunded(address indexed by, uint256 amount);
@@ -60,7 +76,9 @@ contract Staking {
     event Claimed(address indexed user, uint256 amount);
     event EmergencyWithdrawn(address indexed user, uint256 amount);
 
-    constructor(
+    // ========== constructor ==========
+  // We use the constructor to initialize the contract with correct values before anyone starts using it.
+      constructor(
         address _stakingToken,
         address _rewardToken,
         uint256 _rewardPerBlock,
@@ -81,28 +99,29 @@ contract Staking {
     }
 
     // ========== view math helper ==========
-
-    function pendingReward(address _user) external view returns (uint256) {
-        UserInfo memory user = userInfo[_user];
+    function pendingReward (address _user) external view returns (uint256) {
+        // Because it is view, it only reads state and does not modify balances or update checkpoints.
+        UserInfo memory user = userInfo [_user];
         uint256 _accRewardPerToken = accRewardPerToken;
 
         uint256 fromBlock = lastRewardBlock;
-        uint256 toBlock = _min(block.number, END_BLOCK);
-        if (toBlock > fromBlock && totalStaked != 0) {
+        uint256 toBlock = _min (block.number, END_BLOCK);
+        if (toBlock > fromBlock && totalStaked != 0){
             uint256 blocks = toBlock - fromBlock;
             uint256 reward = blocks * REWARD_PER_BLOCK;
             _accRewardPerToken += (reward * PRECISION) / totalStaked;
         }
-
-        return (user.amount * _accRewardPerToken) / PRECISION - user.rewardDebt;
-    }
+        return (user.amount * _accRewardPerToken) / PRECISION - user.rewardDebt;         
+        }
 
     // ========== core math logic ==========
-
-    modifier onlyOwner() {
+// reusable piece of code
+  
+    modifier onlyOwner(){
         if (msg.sender != owner) revert NotOwner();
         _;
     }
+
 
     modifier whenNotPaused() {
         if (isPaused) revert ContractPaused();
@@ -111,15 +130,16 @@ contract Staking {
 
     modifier nonReentrant() {
         if (_locked != 1) revert Reentrancy();
-        _locked = 2;
-        _;
-        _locked = 1;
+        _locked = 2; //(Lock before execution)
+        _; // (Execute the function)
+        _locked = 1; // (Unlock after completion)
     }
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {
         return a < b ? a : b;
     }
 
+    // core logic
     // update global accumulator based on how many blocks passed
     function _updatePool() internal {
         uint256 toBlock = _min(block.number, END_BLOCK);
@@ -139,6 +159,9 @@ contract Staking {
     }
 
     // settle user's pending reward and send it
+    // Harvest function means collect your earned rewards.
+
+    // harvest is the moment when we are calculating and paying the user’s current pending reward.
     function _harvest(address _user) internal {
         UserInfo storage user = userInfo[_user];
         uint256 pending = (user.amount * accRewardPerToken) /
@@ -154,6 +177,9 @@ contract Staking {
     }
 
     // update user's rewardDebt snapshot
+    // “save the user’s reward checkpoint so future claims are calculated correctly.”
+
+    // _updateUser() is not the place where we calculate what the user should receive, so we do not subtract rewardDebt there.
     function _updateUser(address _user) internal {
         UserInfo storage user = userInfo[_user];
         user.rewardDebt = (user.amount * accRewardPerToken) / PRECISION;
@@ -164,6 +190,8 @@ contract Staking {
         if (!success) revert TokenTransferFailed();
     }
 
+
+// It makes sure the token transfer really happened; if not, the whole transaction fails.
     function _safeTransferFrom(
         IERC20 token,
         address from,
@@ -174,6 +202,8 @@ contract Staking {
         if (!success) revert TokenTransferFailed();
     }
 
+
+// This function calculates the maximum reward tokens currently available for distribution from the contract.
     function _availableRewardBalance() internal view returns (uint256) {
         uint256 fundedMinusPaid = totalRewardsFunded - totalRewardsPaid;
         uint256 contractRewardBalance = REWARD_TOKEN.balanceOf(address(this));
@@ -186,7 +216,7 @@ contract Staking {
 
         return
             contractRewardBalance < fundedMinusPaid
-                ? contractRewardBalance
+                ? contractRewardBalance 
                 : fundedMinusPaid;
     }
 
@@ -239,9 +269,13 @@ contract Staking {
         if (_beneficiary == address(0)) revert ZeroAddress();
         if (block.number < START_BLOCK) revert RewardsNotStarted();
 
-        _updatePool(); // 1) update global math
-        _harvest(_beneficiary); // 2) pay old rewards
+        // 1) synchronize rewards state for the whole pool
+        _updatePool();
+        // 2) settle any pending rewards for the beneficiary
+        _harvest(_beneficiary);
+
         if (_amount > 0) {
+            // transfer stake from caller to contract, then credit beneficiary
             _safeTransferFrom(
                 STAKING_TOKEN,
                 msg.sender,
@@ -252,11 +286,15 @@ contract Staking {
             totalStaked += _amount;
             emit Deposited(_beneficiary, _amount);
         }
-        _updateUser(_beneficiary); // 3) refresh rewardDebt
+
+        // 3) refresh the beneficiary's reward debt snapshot
+        _updateUser(_beneficiary);
     }
 
     function withdraw(uint256 _amount) external whenNotPaused nonReentrant {
+        // synchronize reward accumulation before withdrawing
         _updatePool();
+        // pay any pending rewards for the withdrawer
         _harvest(msg.sender);
 
         UserInfo storage user = userInfo[msg.sender];
@@ -269,6 +307,7 @@ contract Staking {
             emit Withdrawn(msg.sender, _amount);
         }
 
+        // refresh withdrawer's reward debt to the new state
         _updateUser(msg.sender);
     }
 
