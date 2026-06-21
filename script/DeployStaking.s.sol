@@ -16,17 +16,13 @@ contract DeployStaking is Script {
         uint256 rewardPerBlock = vm.envUint("REWARD_PER_BLOCK");
         uint256 startBlock = vm.envUint("START_BLOCK");
         uint256 endBlock = vm.envUint("END_BLOCK");
+        uint256 allocPoint = vm.envOr("ALLOC_POINT", uint256(100));
 
         uint256 rewardFunding = vm.envOr("REWARD_FUNDING", uint256(0));
 
         vm.startBroadcast(deployerPrivateKey);
-        Staking staking = new Staking(
-            stakingToken,
-            rewardToken,
-            rewardPerBlock,
-            startBlock,
-            endBlock
-        );
+        Staking staking = new Staking(rewardToken, rewardPerBlock, startBlock, endBlock);
+        staking.add(allocPoint, IERC20(stakingToken), false);
 
         if (rewardFunding > 0) {
             IERC20Minimal(rewardToken).approve(address(staking), rewardFunding);
@@ -36,4 +32,3 @@ contract DeployStaking is Script {
         vm.stopBroadcast();
     }
 }
-

@@ -56,6 +56,7 @@ contract MockERC20 {
 
 contract StakingTest is Test {
     MockERC20 internal stakingToken;
+    MockERC20 internal secondStakingToken;
     MockERC20 internal rewardToken;
     Staking internal staking;
 
@@ -66,110 +67,112 @@ contract StakingTest is Test {
     uint256 internal constant INITIAL_MINT = 1_000_000 ether;
     uint256 internal constant STAKE_AMOUNT = 100 ether;
     uint256 internal constant REWARD_PER_BLOCK = 1 ether;
+    uint256 internal constant PID_STAKING = 0;
+    uint256 internal constant PID_SECOND = 1;
 
     function setUp() public {
         stakingToken = new MockERC20("Stake Token", "STK");
+        secondStakingToken = new MockERC20("Second Stake Token", "STK2");
         rewardToken = new MockERC20("Reward Token", "RWD");
 
         stakingToken.mint(alice, INITIAL_MINT);
         stakingToken.mint(bob, INITIAL_MINT);
+        secondStakingToken.mint(alice, INITIAL_MINT);
+        secondStakingToken.mint(bob, INITIAL_MINT);
         rewardToken.mint(owner, INITIAL_MINT);
 
         uint256 startBlock = block.number;
         uint256 endBlock = startBlock + 1_000;
 
-        staking = new Staking(
-            address(stakingToken),
-            address(rewardToken),
-            REWARD_PER_BLOCK,
-            startBlock,
-            endBlock
-        );
+        staking = new Staking(address(rewardToken), REWARD_PER_BLOCK, startBlock, endBlock);
+
+        staking.add(100, IERC20(address(stakingToken)), false);
+        staking.add(100, IERC20(address(secondStakingToken)), false);
 
         // fund rewards
         rewardToken.approve(address(staking), INITIAL_MINT);
         staking.fundRewards(500_000 ether);
     }
 
-
-
     function testConstructorRevertsOnZeroAddresses() public {
         vm.expectRevert(Staking.ZeroAddress.selector);
-        new Staking(address(0), address(rewardToken), REWARD_PER_BLOCK, block.number, block.number + 10);
-
-        vm.expectRevert(Staking.ZeroAddress.selector);
-        new Staking(address(stakingToken), address(0), REWARD_PER_BLOCK, block.number, block.number + 10);
+        new Staking(address(0), REWARD_PER_BLOCK, block.number, block.number + 10);
     }
 
     function testConstructorRevertsOnZeroRewardPerBlock() public {
         vm.expectRevert(Staking.ZeroAmount.selector);
-        new Staking(address(stakingToken), address(rewardToken), 0, block.number, block.number + 10);
+        new Staking(address(rewardToken), 0, block.number, block.number + 10);
     }
 
     function testConstructorRevertsOnInvalidRange() public {
         vm.expectRevert(Staking.InvalidRewardRange.selector);
-        new Staking(address(stakingToken), address(rewardToken), REWARD_PER_BLOCK, 10, 5);
+        new Staking(address(rewardToken), REWARD_PER_BLOCK, 10, 5);
     }
-
-  
 
     function testDepositAndAccrueRewards() public {
         vm.startPrank(alice);
         stakingToken.approve(address(staking), STAKE_AMOUNT);
-        staking.deposit(STAKE_AMOUNT);
+        staking.deposit(PID_STAKING, STAKE_AMOUNT);
         vm.stopPrank();
 
- 
         vm.roll(block.number + 10);
 
-
-        uint256 pending = staking.pendingReward(alice);
-        assertEq(pending, 10 * REWARD_PER_BLOCK, "pending reward");
+        uint256 pending = staking.pendingReward(PID_STAKING, alice);
+        assertEq(pending, 5 * REWARD_PER_BLOCK, "pending reward");
 
         uint256 beforeBalance = rewardToken.balanceOf(alice);
 
         vm.prank(alice);
-        staking.claim();
+        staking.claim(PID_STAKING);
 
         uint256 afterBalance = rewardToken.balanceOf(alice);
-        assertEq(afterBalance - beforeBalance, 10 * REWARD_PER_BLOCK, "claimed reward");
+        assertEq(afterBalance - beforeBalance, 5 * REWARD_PER_BLOCK, "claimed reward");
+    }
+
+    function testMultiplePoolsSplitRewardsByAllocationPoints() public {
+        vm.startPrank(alice);
+        stakingToken.approve(address(staking), STAKE_AMOUNT);
+        staking.deposit(PID_STAKING, STAKE_AMOUNT);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        secondStakingToken.approve(address(staking), STAKE_AMOUNT);
+        staking.deposit(PID_SECOND, STAKE_AMOUNT);
+        vm.stopPrank();
+
+        vm.roll(block.number + 10);
+
+        assertEq(staking.pendingReward(PID_STAKING, alice), 5 ether, "pool 0 reward");
+        assertEq(staking.pendingReward(PID_SECOND, bob), 5 ether, "pool 1 reward");
     }
 
     function testWithdrawReturnsPrincipalAndKeepsRewardsCorrect() public {
         vm.startPrank(alice);
         stakingToken.approve(address(staking), STAKE_AMOUNT);
-        staking.deposit(STAKE_AMOUNT);
+        staking.deposit(PID_STAKING, STAKE_AMOUNT);
         vm.stopPrank();
 
         vm.roll(block.number + 5);
 
         vm.prank(alice);
-        staking.withdraw(STAKE_AMOUNT);
+        staking.withdraw(PID_STAKING, STAKE_AMOUNT);
 
-   
         assertEq(stakingToken.balanceOf(alice), INITIAL_MINT, "principal returned");
 
-
-        uint256 expectedReward = 5 * REWARD_PER_BLOCK;
+        uint256 expectedReward = (5 * REWARD_PER_BLOCK) / 2;
         uint256 aliceRewardBalance = rewardToken.balanceOf(alice);
         assertEq(aliceRewardBalance, expectedReward, "reward on withdraw");
-        (uint256 amount, uint256 rewardDebt) = staking.userInfo(alice);
+        (uint256 amount, uint256 rewardDebt) = staking.userInfo(PID_STAKING, alice);
         assertEq(amount, 0, "user amount");
         assertEq(rewardDebt, 0, "user rewardDebt");
     }
 
     function testDepositBeforeStartReverts() public {
-    
         uint256 startBlock = block.number + 10;
         uint256 endBlock = startBlock + 100;
 
-        Staking futurePool = new Staking(
-            address(stakingToken),
-            address(rewardToken),
-            REWARD_PER_BLOCK,
-            startBlock,
-            endBlock
-        );
+        Staking futurePool = new Staking(address(rewardToken), REWARD_PER_BLOCK, startBlock, endBlock);
+        futurePool.add(100, IERC20(address(stakingToken)), false);
 
         rewardToken.approve(address(futurePool), INITIAL_MINT);
         futurePool.fundRewards(1000 ether);
@@ -177,7 +180,7 @@ contract StakingTest is Test {
         vm.startPrank(alice);
         stakingToken.approve(address(futurePool), STAKE_AMOUNT);
         vm.expectRevert(Staking.RewardsNotStarted.selector);
-        futurePool.deposit(STAKE_AMOUNT);
+        futurePool.deposit(PID_STAKING, STAKE_AMOUNT);
         vm.stopPrank();
     }
 
@@ -195,13 +198,13 @@ contract StakingTest is Test {
     function testPausePreventsUserActions() public {
         staking.setPaused(true);
         vm.expectRevert(Staking.ContractPaused.selector);
-        staking.deposit(0);
+        staking.deposit(PID_STAKING, 0);
 
         vm.expectRevert(Staking.ContractPaused.selector);
-        staking.withdraw(0);
+        staking.withdraw(PID_STAKING, 0);
 
         vm.expectRevert(Staking.ContractPaused.selector);
-        staking.claim();
+        staking.claim(PID_STAKING);
     }
 
     function testFundAndWithdrawUnusedRewards() public {
@@ -218,7 +221,6 @@ contract StakingTest is Test {
     }
 
     function testWithdrawUnusedRewardsCannotExceedAvailable() public {
-
         vm.roll(block.number + 100);
 
         uint256 available = _availableRewardBalanceExternal();
@@ -226,53 +228,41 @@ contract StakingTest is Test {
         staking.withdrawUnusedRewards(owner, available + 1);
     }
 
-
     function testEmergencyWithdrawSkipsRewardsAndResetsUser() public {
         vm.startPrank(alice);
         stakingToken.approve(address(staking), STAKE_AMOUNT);
-        staking.deposit(STAKE_AMOUNT);
+        staking.deposit(PID_STAKING, STAKE_AMOUNT);
         vm.stopPrank();
 
         vm.roll(block.number + 20);
 
         vm.prank(alice);
-        staking.emergencyWithdraw();
-
+        staking.emergencyWithdraw(PID_STAKING);
 
         assertEq(stakingToken.balanceOf(alice), INITIAL_MINT, "principal");
         assertEq(rewardToken.balanceOf(alice), 0, "no rewards");
 
-        (uint256 amount, uint256 rewardDebt) = staking.userInfo(alice);
+        (uint256 amount, uint256 rewardDebt) = staking.userInfo(PID_STAKING, alice);
         assertEq(amount, 0);
         assertEq(rewardDebt, 0);
     }
 
-      function testGetUserPositionReturnsExpectedValues() public {
+    function testGetUserPositionReturnsExpectedValues() public {
         vm.startPrank(alice);
         stakingToken.approve(address(staking), STAKE_AMOUNT);
-        staking.deposit(STAKE_AMOUNT);
+        staking.deposit(PID_STAKING, STAKE_AMOUNT);
         vm.stopPrank();
         vm.roll(block.number + 12);
-        (uint256 stakedAmount, uint256 pending, uint256 rewardDebt) = staking.getUserPosition(alice);
+        (uint256 stakedAmount, uint256 pending, uint256 rewardDebt) = staking.getUserPosition(PID_STAKING, alice);
         assertEq(stakedAmount, STAKE_AMOUNT, "staked amount");
-        assertEq(pending, 12 * REWARD_PER_BLOCK, "pending reward");
+        assertEq(pending, 6 * REWARD_PER_BLOCK, "pending reward");
         assertEq(rewardDebt, 0, "reward debt");
     }
 
-
-
     function _availableRewardBalanceExternal() internal view returns (uint256) {
-
         uint256 fundedMinusPaid = staking.totalRewardsFunded() - staking.totalRewardsPaid();
         uint256 contractRewardBalance = rewardToken.balanceOf(address(staking));
-
-        if (address(rewardToken) == address(stakingToken)) {
-            uint256 totalStaked = staking.totalStaked();
-            if (contractRewardBalance <= totalStaked) return 0;
-            contractRewardBalance -= totalStaked;
-        }
 
         return contractRewardBalance < fundedMinusPaid ? contractRewardBalance : fundedMinusPaid;
     }
 }
-
