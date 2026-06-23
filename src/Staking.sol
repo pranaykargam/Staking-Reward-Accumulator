@@ -209,8 +209,7 @@ contract Staking {
         emit PoolUpdated(_pid, _allocPoint);
     }
 
-    // core logic
-    // update global accumulator based on how many blocks passed
+  
 
      // It implements the MasterChef pattern - Instead of looping through all stakers,
   // it maintains a single accumulator (accRewardPerToken) that tracks accumulated rewards per token.
